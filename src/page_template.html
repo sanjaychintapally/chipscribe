@@ -1,0 +1,157 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Sanjay Chintapally">
+<meta name="description" content="ChipScribe — a free in-browser IEEE-style block diagram editor for analog, RF & mixed-signal ICs. Drag-and-drop circuit stamps, glued connector wiring, and publication-ready SVG/PNG export.">
+<title>ChipScribe: IEEE-style block diagram editor for analog, RF & mixed-signal ICs</title>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "ChipScribe",
+  "url": "https://web.mit.edu/sanjayc/chipscribe/",
+  "description": "Free in-browser IEEE-style block diagram editor for analog, RF and mixed-signal ICs. Drag-and-drop circuit stamps (amplifiers, mixers, filters, DACs, ADCs, passives), glued connector wiring that re-routes when blocks move, and publication-ready SVG/PNG export in the ISSCC/JSSC figure style. An alternative to Visio, draw.io, and Illustrator for circuit block diagrams.",
+  "applicationCategory": "DesignApplication",
+  "operatingSystem": "Any (web browser)",
+  "browserRequirements": "Requires JavaScript",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "author": {"@type": "Person", "name": "Sanjay Chintapally", "email": "sanjayc@mit.edu"},
+  "codeRepository": "https://github.com/sanjaychintapally/chipscribe",
+  "keywords": "block diagram editor, circuit diagram maker, IEEE figure, ISSCC, JSSC, analog IC, RF IC, mixed-signal, SVG export, Visio alternative, draw.io alternative"
+}
+</script>
+<style>
+  /* Deliberate single-theme print style: white paper, black ink, IEEE figure look */
+  *{box-sizing:border-box}
+  body{background:#ffffff; color:#111; margin:0; padding:34px 24px 60px;
+    font:15px/1.5 Georgia,"Times New Roman",serif;
+    -webkit-text-size-adjust:100%; text-size-adjust:100%;}
+  .wrap{max-width:1500px; margin:0 auto}
+  h1{font:600 20px/1.3 Helvetica,Arial,sans-serif; letter-spacing:.01em; margin:0 0 4px}
+  .sub{font:12.5px Helvetica,Arial,sans-serif; color:#555; margin:0 0 20px}
+  .fig{background:#fff; border:1px solid #ccc; padding:10px; overflow:auto; position:relative}
+  .fig svg{display:block; width:100%; height:auto; margin:0 auto}
+  .cap{margin:14px 6px 0; font-size:13.5px; color:#111}
+  .cap b{font-weight:700}
+  .prov{margin:26px 6px 0; font:12px Helvetica,Arial,sans-serif; color:#666}
+  .bar{display:flex; gap:6px; justify-content:flex-end; align-items:center; margin:0 0 8px; flex-wrap:wrap}
+  .bar a,.bar button,.bar select{font:12px Helvetica,Arial,sans-serif; padding:5px 10px; background:#fff;
+    border:1px solid #999; border-radius:4px; cursor:pointer; color:#111; text-decoration:none}
+  .bar a:hover,.bar button:hover,.bar select:hover{border-color:#111}
+  .bar button.on{background:#1a73e8; color:#fff; border-color:#1a73e8}
+  .bar button.tg.on{background:#444; border-color:#444}
+  #tools{display:none; justify-content:flex-start}
+  #tools .sep{width:1px; height:20px; background:#ccc; margin:0 2px}
+  #hint{display:none; font:11.5px Helvetica,Arial,sans-serif; color:#1a73e8; margin:0 0 8px; text-align:right}
+  #sv{font:12px Helvetica,Arial,sans-serif; color:#2a7}
+  #sv.warn{color:#c60}
+  #srcp,#pngp{display:none; margin:8px 0}
+  #srcp textarea{width:100%; height:150px; font:11px ui-monospace,Menlo,monospace; color:#333}
+  #srcp button{font:12px Helvetica,Arial,sans-serif; padding:4px 12px; margin-top:4px}
+  #pngp{border:1px solid #ccc; padding:8px; font:12px Helvetica,Arial,sans-serif; color:#555}
+  #pngp img{max-width:100%; display:block; margin-top:6px; border:1px solid #eee}
+  #copied{font:12px Helvetica,Arial,sans-serif; color:#2a7; display:none}
+  .editing.tool-sel .mv{cursor:move}
+  .editing.tool-sel .mv:hover{filter:drop-shadow(0 0 2.5px #7ab0f5)}
+  .editing.tool-line svg,.editing.tool-arrow svg,.editing.tool-box svg{cursor:crosshair}
+  .editing.tool-text svg{cursor:text}
+  .editing.tool-stamp svg{cursor:copy}
+  .editing.tool-conn svg{cursor:crosshair}
+</style>
+
+<div class="wrap">
+  <h1 style="margin-bottom:16px"><span style="font-weight:800">ChipScribe</span>: <span style="font-weight:400;font-size:16px">IEEE-style block diagram editor for analog, RF &amp; mixed-signal ICs</span></h1>
+  <p class="sub"><b style="color:#111">Metadata:</b> Generic I/Q receiver chain — wires are glued: drag any block and its connectors re-route. Click <b>Edit layout</b> for drawing tools and circuit stamps; work autosaves in your browser; export SVG / PNG / layout JSON when done.</p>
+  <div class="bar">
+    <span id="copied">copied ✓</span>
+    <span id="sv"></span>
+    <button id="ed">Edit layout</button>
+    <button id="svbtn">Save</button>
+    <button id="undo">↩ Undo</button>
+    <button id="redo">↪ Redo</button>
+    <button id="rs">Reset edits</button>
+    <button id="chipb" class="tg on">Chip</button>
+    <a id="dl" download="chipscribe.svg" href="#">SVG</a>
+    <button id="png">PNG</button>
+    <button id="cp">Copy SVG source</button>
+    <button id="cj">Copy layout JSON</button>
+    <button id="lj">Load JSON</button>
+  </div>
+  <div class="bar" id="tools">
+    <button class="tl on" data-tool="sel">Select</button>
+    <span class="sep"></span>
+    <button class="tl" data-tool="line">Line</button>
+    <button class="tl" data-tool="arrow">Arrow</button>
+    <button class="tl" data-tool="box">Box</button>
+    <button class="tl" data-tool="text">Text</button>
+    <button class="tl" data-tool="conn">Connect</button>
+    <select id="stampsel" title="Circuit stamps — pick to place">
+      <option value="amp">Stamp: Amp ▷</option>
+      <option value="vga">Stamp: VGA ▷↗</option>
+      <option value="camp2">Stamp: Buf chain ×2</option>
+      <option value="camp3">Stamp: Buf chain ×3</option>
+      <option value="camp4">Stamp: Buf chain ×4</option>
+      <option value="mixer">Stamp: Mixer ⊗</option>
+      <option value="sum">Stamp: Sum ⊕</option>
+      <option value="slpf">Stamp: LPF</option>
+      <option value="sdac">Stamp: DAC</option>
+      <option value="sadc">Stamp: ADC</option>
+      <option value="div2">Stamp: ÷2</option>
+      <option value="ind">Stamp: Inductor</option>
+      <option value="cap">Stamp: Capacitor</option>
+      <option value="res">Stamp: Resistor</option>
+      <option value="ant">Stamp: Antenna</option>
+      <option value="osc">Stamp: Oscillator</option>
+      <option value="padp">Stamp: Pad ▣</option>
+      <option value="gnd">Stamp: GND ⏚</option>
+      <option value="dot">Stamp: Node ●</option>
+      <option value="slash">Stamp: Slash ／</option>
+    </select>
+    <span class="sep"></span>
+    <button id="dup">Dup</button>
+    <button id="zf">Front</button>
+    <button id="zb">Back</button>
+    <button id="rot">Rotate</button>
+    <select id="alignsel" title="Align / distribute selection">
+      <option value="">Align…</option>
+      <option value="left">Left</option>
+      <option value="hcent">Center H</option>
+      <option value="right">Right</option>
+      <option value="top">Top</option>
+      <option value="vcent">Middle V</option>
+      <option value="bot">Bottom</option>
+      <option value="disth">Distribute H</option>
+      <option value="distv">Distribute V</option>
+    </select>
+    <select id="tsz" title="Text size">
+      <option value="8.5">Text S</option>
+      <option value="10.5" selected>Text M</option>
+      <option value="13">Text L</option>
+    </select>
+    <span class="sep"></span>
+    <button id="snap" class="tg on">Snap</button>
+    <button id="carw" class="tg">Conn →</button>
+    <button id="dsh" class="tg">Dashed</button>
+    <button id="gry" class="tg">Gray</button>
+    <button id="grid" class="tg">Grid</button>
+    <span class="sep"></span>
+    <button id="zo">−</button>
+    <button id="zr">100%</button>
+    <button id="zi">+</button>
+  </div>
+  <p id="hint">Drag to move · marquee-drag empty space to multi-select (Shift-click adds) · arrows nudge (Shift ×10) ·
+  Del removes · Ctrl-Z/Y undo-redo · Ctrl-C/V copy-paste · Ctrl-D dup · R rotates · double-click text to edit ·
+  Shift while drawing = orthogonal · box corner / line endpoints show drag handles when single-selected ·
+  <b>Connect</b>: drag from one element to another — glued wires re-route when blocks move ("Conn →" adds arrowheads).</p>
+  <div id="srcp"><textarea id="srct"></textarea><button id="japply" style="display:none">Apply</button></div>
+  <div id="pngp"></div>
+  <div class="fig" id="figbox">__SVG__</div>
+</div>
+<p style="position:fixed;left:14px;bottom:10px;margin:0;z-index:3;
+   font:12px Helvetica,Arial,sans-serif;color:#888;background:rgba(255,255,255,.85);
+   padding:2px 6px;border-radius:4px">
+  Built by <b style="color:#555">Sanjay Chintapally</b> ·
+  <a href="mailto:sanjayc@mit.edu" style="color:#888">sanjayc@mit.edu</a></p>
+
+<script>
+__JS__
+</script>
